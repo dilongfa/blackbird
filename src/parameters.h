@@ -26,7 +26,7 @@ struct Parameters {
   double trailingLim;
   unsigned trailingCount;
   double orderBookFactor;
-  bool demoMode;
+  bool isDemoMode;
   std::string leg1;
   std::string leg2;
   bool verbose;
@@ -43,31 +43,64 @@ struct Parameters {
   std::string bitfinexApi;
   std::string bitfinexSecret;
   double bitfinexFees;
+  bool bitfinexEnable;
   std::string okcoinApi;
   std::string okcoinSecret;
   double okcoinFees;
+  bool okcoinEnable;
   std::string bitstampClientId;
   std::string bitstampApi;
   std::string bitstampSecret;
   double bitstampFees;
+  bool bitstampEnable;
   std::string geminiApi;
   std::string geminiSecret;
   double geminiFees;
+  bool geminiEnable;
   std::string krakenApi;
+
   std::string krakenSecret;
   double krakenFees;
+  bool krakenEnable;
   std::string itbitApi;
   std::string itbitSecret;
   double itbitFees;
-  std::string btceApi;
-  std::string btceSecret;
-  double btceFees;
+  bool itbitEnable;
+  std::string wexApi;
+  std::string wexSecret;
+  double wexFees;
+  bool wexEnable;
   std::string poloniexApi;
   std::string poloniexSecret;
   double poloniexFees;
+  bool poloniexEnable;
   std::string gdaxApi;
   std::string gdaxSecret;
+  std::string gdaxPhrase;
   double gdaxFees;
+  bool gdaxEnable;
+  std::string quadrigaApi;
+  std::string quadrigaSecret;
+  std::string quadrigaClientId;
+  double quadrigaFees;
+  bool quadrigaEnable;
+  std::string exmoApi;
+  std::string exmoSecret;
+  double exmoFees;
+  bool exmoEnable;
+  std::string cexioClientId;
+  std::string cexioApi;
+  std::string cexioSecret;
+  double cexioFees;
+  bool cexioEnable;
+  std::string bittrexApi;
+  std::string bittrexSecret;
+  double bittrexFees;
+  bool bittrexEnable;
+  std::string binanceApi;
+  std::string binanceSecret;
+  double binanceFees;
+  bool binanceEnable;
 
   bool sendEmail;
   std::string senderAddress;
@@ -84,8 +117,6 @@ struct Parameters {
   void addExchange(std::string n, double f, bool h, bool m);
 
   int nbExch() const;
-  
-  std::string tradedPair() const;
 };
 
 // Copies the parameters from the configuration file

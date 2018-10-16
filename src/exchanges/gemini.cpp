@@ -7,11 +7,12 @@
 
 #include "openssl/sha.h"
 #include "openssl/hmac.h"
-#include <unistd.h>
-#include <math.h>
+#include <chrono>
+#include <thread>
+#include <cmath>
 #include <sstream>
 #include <iomanip>
-#include <sys/time.h>
+#include <ctime>
 
 namespace Gemini {
 
@@ -25,13 +26,9 @@ static RestApi& queryHandle(Parameters &params)
 quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
-  // OK, there is a better way to do this...
   std::string url;
-  if (params.tradedPair().compare("BTC/USD") == 0) {
-    url = "/v1/book/BTCUSD";
-  } else if (params.tradedPair().compare("ETH/BTC") == 0) {
-    url = "/v1/book/ETHBTC";
-  }
+  url = "/v1/book/BTCUSD";
+  
   unique_json root { exchange.getRequest(url) };
   const char *quote = json_string_value(json_object_get(json_array_get(json_object_get(root.get(), "bids"), 0), "price"));
   auto bidValue = quote ? std::stod(quote) : 0.0;
@@ -45,8 +42,10 @@ quote_t getQuote(Parameters &params)
 double getAvail(Parameters& params, std::string currency) {
   unique_json root { authRequest(params, "https://api.gemini.com/v1/balances", "balances", "") };
   while (json_object_get(root.get(), "message") != NULL) {
-    sleep(1.0);
-    *params.logFile << "<Gemini> Error with JSON: " << json_dumps(root.get(), 0) << ". Retrying..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    auto dump = json_dumps(root.get(), 0);
+    *params.logFile << "<Gemini> Error with JSON: " << dump << ". Retrying..." << std::endl;
+    free(dump);
     root.reset(authRequest(params, "https://api.gemini.com/v1/balances", "balances", ""));
   }
   // go through the list
@@ -128,9 +127,8 @@ double getLimitPrice(Parameters& params, double volume, bool isBid)
 }
 
 json_t* authRequest(Parameters& params, std::string url, std::string request, std::string options) {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  unsigned long long nonce = (tv.tv_sec * 1000.0) + (tv.tv_usec * 0.001) + 0.5;
+  static uint64_t nonce = time(nullptr) * 4;
+  ++nonce;
   // check if options parameter is empty
   std::ostringstream oss;
   if (options.empty()) {
@@ -174,9 +172,11 @@ json_t* authRequest(Parameters& params, std::string url, std::string request, st
     resCurl = curl_easy_perform(params.curl);
     json_t *root;
     json_error_t error;
+    using std::this_thread::sleep_for;
+    using secs = std::chrono::seconds;
     while (resCurl != CURLE_OK) {
       *params.logFile << "<Gemini> Error with cURL. Retry in 2 sec..." << std::endl;
-      sleep(2.0);
+      sleep_for(secs(2));
       readBuffer = "";
       resCurl = curl_easy_perform(params.curl);
     }
@@ -185,12 +185,12 @@ json_t* authRequest(Parameters& params, std::string url, std::string request, st
       *params.logFile << "<Gemini> Error with JSON:\n" << error.text << std::endl;
       *params.logFile << "<Gemini> Buffer:\n" << readBuffer.c_str() << std::endl;
       *params.logFile << "<Gemini> Retrying..." << std::endl;
-      sleep(2.0);
+      sleep_for(secs(2));
       readBuffer = "";
       resCurl = curl_easy_perform(params.curl);
       while (resCurl != CURLE_OK) {
         *params.logFile << "<Gemini> Error with cURL. Retry in 2 sec..." << std::endl;
-        sleep(2.0);
+        sleep_for(secs(2));
         readBuffer = "";
         resCurl = curl_easy_perform(params.curl);
       }

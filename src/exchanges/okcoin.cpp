@@ -8,8 +8,9 @@
 #include "openssl/md5.h"
 #include <sstream>
 #include <iomanip>
-#include <unistd.h> // sleep
-#include <math.h>   // fabs
+#include <chrono>
+#include <thread>   // sleep_for
+#include <cmath>    // fabs
 
 namespace OKCoin {
 
@@ -23,7 +24,7 @@ static RestApi& queryHandle(Parameters &params)
 quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/api/ticker.do?ok=1") };
+  unique_json root { exchange.getRequest("/api/v1/ticker.do?symbol=btc_usd") };
   const char *quote = json_string_value(json_object_get(json_object_get(root.get(), "ticker"), "buy"));
   auto bidValue = quote ? std::stod(quote) : 0.0;
 
@@ -113,7 +114,7 @@ bool isOrderComplete(Parameters& params, std::string orderId)
   oss << "api_key=" << params.okcoinApi << "&order_id=" << orderId << "&symbol=btc_usd";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/order_info.do", signature, content) };
-  int status = json_integer_value(json_object_get(json_array_get(json_object_get(root.get(), "orders"), 0), "status"));
+  auto status = json_integer_value(json_object_get(json_array_get(json_object_get(root.get(), "orders"), 0), "status"));
 
   return status == 2;
 }
@@ -123,7 +124,7 @@ double getActivePos(Parameters& params) { return getAvail(params, "btc"); }
 double getLimitPrice(Parameters& params, double volume, bool isBid)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/api/v1/depth.do") };
+  unique_json root { exchange.getRequest("/api/v1/depth.do?symbol=btc_usd") };
   auto bidask = json_object_get(root.get(), isBid ? "bids" : "asks");
 
   // loop on volume
@@ -170,9 +171,11 @@ json_t* authRequest(Parameters& params, std::string url, std::string signature, 
     curl_easy_setopt(params.curl, CURLOPT_CONNECTTIMEOUT, 10L);
     resCurl = curl_easy_perform(params.curl);
 
+    using std::this_thread::sleep_for;
+    using secs = std::chrono::seconds;
     while (resCurl != CURLE_OK) {
       *params.logFile << "<OKCoin> Error with cURL. Retry in 2 sec..." << std::endl;
-      sleep(4.0);
+      sleep_for(secs(4));
       resCurl = curl_easy_perform(params.curl);
     }
     json_error_t error;
@@ -181,12 +184,12 @@ json_t* authRequest(Parameters& params, std::string url, std::string signature, 
       *params.logFile << "<OKCoin> Error with JSON:\n" << error.text << std::endl;
       *params.logFile << "<OKCoin> Buffer:\n" << readBuffer.c_str() << std::endl;
       *params.logFile << "<OKCoin> Retrying..." << std::endl;
-      sleep(4.0);
+      sleep_for(secs(4));
       readBuffer = "";
       resCurl = curl_easy_perform(params.curl);
       while (resCurl != CURLE_OK) {
         *params.logFile << "<OKCoin> Error with cURL. Retry in 2 sec..." << std::endl;
-        sleep(4.0);
+        sleep_for(secs(4));
         readBuffer = "";
         resCurl = curl_easy_perform(params.curl);
       }
@@ -211,7 +214,9 @@ void getBorrowInfo(Parameters& params)
   oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/borrows_info.do", signature, content) };
-  *params.logFile << "<OKCoin> Borrow info:\n" << json_dumps(root.get(), 0) << std::endl;
+  auto dump = json_dumps(root.get(), 0);
+  *params.logFile << "<OKCoin> Borrow info:\n" << dump << std::endl;
+  free(dump);
 }
 
 int borrowBtc(Parameters& params, double amount)
@@ -224,10 +229,11 @@ int borrowBtc(Parameters& params, double amount)
   oss << "api_key=" << params.okcoinApi << "&symbol=btc_usd&days=fifteen&amount=" << 1 << "&rate=0.0001";
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/borrow_money.do", signature, content) };
+  auto dump = json_dumps(root.get(), 0);
   *params.logFile << "<OKCoin> Borrow "
                   << std::setprecision(6) << amount
-                  << " BTC:\n" << json_dumps(root.get(), 0) << std::endl;
-
+                  << " BTC:\n" << dump << std::endl;
+  free(dump);
   bool isBorrowAccepted = json_is_true(json_object_get(root.get(), "result"));
   return isBorrowAccepted ?
          json_integer_value(json_object_get(root.get(), "borrow_id")) :
@@ -244,7 +250,9 @@ void repayBtc(Parameters& params, int borrowId)
   oss << "api_key=" << params.okcoinApi << "&borrow_id=" << borrowId;
   std::string content = oss.str();
   unique_json root { authRequest(params, "https://www.okcoin.com/api/v1/repayment.do", signature, content) };
-  *params.logFile << "<OKCoin> Repay borrowed BTC:\n" << json_dumps(root.get(), 0) << std::endl;
+  auto dump = json_dumps(root.get(), 0);
+  *params.logFile << "<OKCoin> Repay borrowed BTC:\n" << dump << std::endl;
+  free(dump);
 }
 
 }

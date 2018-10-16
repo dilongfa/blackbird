@@ -7,12 +7,11 @@
 
 #include "openssl/sha.h"
 #include "openssl/hmac.h"
-#include <unistd.h>
 #include <sstream>
 #include <iomanip>
 #include <array>
-#include <math.h>
-#include <sys/time.h>
+#include <cmath>
+#include <ctime>
 
 namespace Bitfinex {
 
@@ -26,6 +25,8 @@ static RestApi& queryHandle(Parameters &params)
 static json_t* checkResponse(std::ostream &logFile, json_t *root)
 {
   auto msg = json_object_get(root, "message");
+  if (!msg) msg = json_object_get(root, "error");
+
   if (msg)
     logFile << "<Bitfinex> Error with response: "
             << json_string_value(msg) << '\n';
@@ -36,7 +37,11 @@ static json_t* checkResponse(std::ostream &logFile, json_t *root)
 quote_t getQuote(Parameters &params)
 {
   auto &exchange = queryHandle(params);
-  unique_json root { exchange.getRequest("/v1/ticker/btcusd") };
+
+  std::string url;
+  url = "/v1/ticker/btcusd";
+  
+  unique_json root { exchange.getRequest(url) };
 
   const char *quote = json_string_value(json_object_get(root.get(), "bid"));
   double bidValue = quote ? std::stod(quote) : 0.0;
@@ -156,12 +161,10 @@ json_t* authRequest(Parameters &params, std::string request, std::string options
 {
   using namespace std;
 
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  unsigned long long nonce = (tv.tv_sec * 1000.0) + (tv.tv_usec * 0.001) + 0.5;
+  static uint64_t nonce = time(nullptr) * 4;
 
   string payload = "{\"request\":\"" + request +
-                   "\",\"nonce\":\"" + to_string(nonce);
+                   "\",\"nonce\":\"" + to_string(++nonce);
   if (options.empty())
   {
     payload += "\"}";
